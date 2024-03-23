@@ -1,0 +1,72 @@
+---
+  apiVersion: "v1"
+  kind: "PersistentVolumeClaim"
+  metadata:
+    name: vscode-data
+  spec:
+    resources:
+      requests:
+        storage: 100Gi
+    accessModes:
+      - ReadWriteOnce
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vscode-server
+  labels:
+    app.kubernetes.io/name: vscode-server  
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vscode-server
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vscode-server
+    spec:
+      serviceAccountName: vscode-server
+      containers:
+      - name: vscode-server
+        image: gitpod/openvscode-server:1.87.1
+        ports:
+        - name: http
+          containerPort: 3000
+        env:
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.uid
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name       
+        volumeMounts:
+            - mountPath: /home/workspace
+              name: vscode-data  
+              subPath: workspace           
+      volumes:
+        - name: vscode-data
+          persistentVolumeClaim:
+            claimName: vscode-data                                                   
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: vscode-server
+spec:
+  ports:
+    - name: http
+      port: 3000
+  selector:
+    app.kubernetes.io/name: vscode-server
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vscode-server
